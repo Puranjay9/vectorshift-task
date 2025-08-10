@@ -18,7 +18,7 @@ CLIENT_SECRET = '2c1053d9-0b09-48d5-9bb6-36b4b21a85c7'
 encoded_client_id_secret = base64.b64encode(f'{CLIENT_ID}:{CLIENT_SECRET}'.encode()).decode()
 
 REDIRECT_URI = 'http://localhost:8000/integrations/hubspot/oauth2callback'
-authorization_url = 'https://app-na2.hubspot.com/oauth/authorize?client_id=91d974d0-cd22-4de4-92aa-a1cc8328e3ef&redirect_uri=http://localhost:8000/integrations/hubspot/oauth2callback&scope=oauth'
+authorization_url = 'https://app-na2.hubspot.com/oauth/authorize?client_id=91d974d0-cd22-4de4-92aa-a1cc8328e3ef&redirect_uri=http://localhost:8000/integrations/hubspot/oauth2callback&scope=crm.objects.products.read%20crm.objects.contacts.write%20crm.objects.products.write%20oauth%20crm.objects.contacts.read'
 
 
 async def authorize_hubspot(user_id, org_id):
@@ -112,11 +112,78 @@ async def get_hubspot_credentials(user_id, org_id):
 
     return credentials
 
+def _recursive_dict_search(data, target_key):
+    """Recursively search for a key in a dictionary of dictionaries."""
+    if target_key in data:
+        return data[target_key]
+    for value in data.values():
+        if isinstance(value, dict):
+            result = _recursive_dict_search(value, target_key)
+            if result is not None:
+                return result
+        elif isinstance(value, list):
+            for item in value:
+                if isinstance(item, dict):
+                    result = _recursive_dict_search(item, target_key)
+                    if result is not None:
+                        return result
+    return None
 
-async def create_integration_item_metadata_object(response_json):
-    # TODO
-    pass
+def create_integration_item_metadata_object(response_json) -> IntegrationItem:
+    name = _recursive_dict_search(response_json['properties'] , 'name')
+    id = response_json['id']
+    type = "product"
+    creation_time = _recursive_dict_search(response_json['properties'] , 'createdAt')
+    last_modiified_time = _recursive_dict_search(response_json['properties'] , 'updatedAt')
 
-async def get_items_hubspot(credentials):
-    # TODO
-    pass
+    integration_item_metadata = IntegrationItem(
+        id = id,
+        type=type,
+        name = name,
+        creation_time=creation_time,
+        last_modified_time=last_modiified_time
+    )
+    
+    return integration_item_metadata
+
+async def get_items_hubspot(credentials) -> list[IntegrationItem]:
+    credentials = json.loads(credentials)
+    list_of_integration_item_metadata = []
+
+    response = requests.post(
+        'https://api.hubapi.com/crm/v3/objects/products/search',
+        json = {
+            "filtergroups" : [
+                {
+                   "filters" : [
+                    {
+                        "propertyName": "",
+                        "operator": "CONTAINS_TOKEN",
+                        "value": "" 
+                    }
+                    ]
+                }
+                 
+            ],
+            "properties": [],
+            "limit" : 10
+        },
+        headers={
+            "Authorization": f"Bearer {credentials.get('access_token')}", 
+            "Content-Type": "application/json"
+        }
+    )
+    print(response.json())
+
+    if response.status_code ==  200:
+        results = response.json()['results']
+        for result in results:
+            list_of_integration_item_metadata.append(
+                create_integration_item_metadata_object(result)
+            )
+
+        print(list_of_integration_item_metadata)
+        return list_of_integration_item_metadata    
+
+    return []
+    
