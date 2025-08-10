@@ -9,6 +9,7 @@ import axios from 'axios';
 const endpointMapping = {
     'Notion': 'notion',
     'Airtable': 'airtable',
+    'HubSpot': 'hubspot',
 };
 
 export const DataForm = ({ integrationType, credentials }) => {
@@ -36,6 +37,8 @@ export const DataForm = ({ integrationType, credentials }) => {
                     value={loadedData ? JSON.stringify(loadedData, null, 2) : ''}
                     sx={{mt: 2}}
                     InputLabelProps={{ shrink: true }}
+                    multiline
+                    minRows={4}
                     disabled
                 />
                 <Button
